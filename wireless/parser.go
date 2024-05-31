@@ -8,7 +8,7 @@ import (
 
 	"github.com/slashdoom/aruba_exporter/rpc"
 	"github.com/slashdoom/aruba_exporter/util"
-	
+
 	log "github.com/sirupsen/logrus"
 )
 
@@ -20,7 +20,7 @@ func (c *wirelessCollector) ParseAccessPoints(ostype string, output string) (map
 	aps := make(map[string]WirelessAccessPoint)
 
 	lines := strings.Split(output, "\n")
-	
+
 	if ostype == rpc.ArubaController {
 		return aps, nil
 	}
@@ -30,12 +30,12 @@ func (c *wirelessCollector) ParseAccessPoints(ostype string, output string) (map
 		APNameRegexp, _ := regexp.Compile(`^!~~~NO_MATCHES~~~!$`)
 
 		ap := WirelessAccessPoint{}
-		currentAPIP:= ""
-		
+		currentAPIP := ""
+
 		for _, line := range lines {
-			
+
 			log.Tracef("line: %+v", line)
-			
+
 			if matches := ConductorIPRegexp.FindStringSubmatch(line); matches != nil {
 				ap = WirelessAccessPoint{Controller: false}
 				currentAPIP = ""
@@ -72,13 +72,13 @@ func (c *wirelessCollector) ParseAccessPoints(ostype string, output string) (map
 func (c *wirelessCollector) ParseChannels(ostype string, output string) (map[string]WirelessChannel, map[string]WirelessRadio, error) {
 	log.Debugf("OS: %s\n", ostype)
 	log.Tracef("output: %s\n", output)
-	
+
 	channels := make(map[string]WirelessChannel)
 	radios := make(map[string]WirelessRadio)
 
 	lines := strings.Split(output, "\n")
 	currentInt := ""
-	
+
 	if ostype == rpc.ArubaController {
 		return channels, radios, nil
 	}
@@ -99,12 +99,12 @@ func (c *wirelessCollector) ParseChannels(ostype string, output string) (map[str
 			if matches := channelRegexp.FindStringSubmatch(line); matches != nil {
 				channel := WirelessChannel{
 					AccessPoint: apName,
-					Band: util.Str2float64(matches[1]),
-					NoiseFloor: util.Str2float64(matches[3]),
-					ChUtil: util.Str2float64(matches[4]),
-					ChQual: util.Str2float64(matches[5]),
-					CovrIndex: util.Str2float64(matches[6]),
-					IntfIndex: util.Str2float64(matches[7]),
+					Band:        util.Str2float64(matches[1]),
+					NoiseFloor:  util.Str2float64(matches[3]),
+					ChUtil:      util.Str2float64(matches[4]),
+					ChQual:      util.Str2float64(matches[5]),
+					CovrIndex:   util.Str2float64(matches[6]),
+					IntfIndex:   util.Str2float64(matches[7]),
 				}
 				channels[matches[2]] = channel
 				log.Debugf("channel name: %+v\n", matches[2])
@@ -143,7 +143,7 @@ func (c *wirelessCollector) ParseChannels(ostype string, output string) (map[str
 
 		return channels, radios, nil
 	}
-                                   
+
 	return make(map[string]WirelessChannel), make(map[string]WirelessRadio), errors.New("Channel info not found")
 }
 

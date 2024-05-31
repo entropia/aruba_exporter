@@ -91,8 +91,8 @@ func (c *wirelessCollector) CollectAccessPoints(client *rpc.Client, ch chan<- pr
 		return make(map[string]WirelessAccessPoint), err
 	}
 	for apName, apData := range aps {
-		l := append(labelValues, fmt.Sprintf("%v",apName))
-		
+		l := append(labelValues, fmt.Sprintf("%v", apName))
+
 		apUpStatus := 0
 		if apData.Up {
 			apUpStatus = 1
@@ -109,13 +109,33 @@ func (c *wirelessCollector) CollectAccessPoints(client *rpc.Client, ch chan<- pr
 	return aps, nil
 }
 
+func (c *wirelessCollector) CollectVLANUsage(client *rpc.Client, ch chan<- prometheus.Metric) error {
+	out, err := client.RunCommand([]string{"show ap vlan-usage"})
+	if err != nil {
+		return err
+	}
+
+	stats := parseAPVLANUsage(out)
+	log.Debugf("vlan usage: %#v", stats)
+	for vlan, clients := range stats {
+		ch <- prometheus.MustNewConstMetric(
+			apVLANUsageDesc,
+			prometheus.GaugeValue,
+			float64(clients),
+			strconv.Itoa(vlan),
+		)
+	}
+
+	return nil
+}
+
 // CollectChannels collects memory informations from Aruba Devices
 func (c *wirelessCollector) CollectChannels(client *rpc.Client, ch chan<- prometheus.Metric, labelValues []string) (map[string]WirelessRadio, error) {
 	var (
-		out string
+		out      string
 		channels map[string]WirelessChannel
-		radios map[string]WirelessRadio
-		err error
+		radios   map[string]WirelessRadio
+		err      error
 	)
 
 	switch client.OSType {
@@ -139,7 +159,7 @@ func (c *wirelessCollector) CollectChannels(client *rpc.Client, ch chan<- promet
 	}
 	for chChannel, chData := range channels {
 		log.Debugf("channel data: %+v", chData)
-		l := append(labelValues, fmt.Sprintf("%v", chData.AccessPoint), fmt.Sprintf("%v",chChannel), fmt.Sprintf("%v", chData.Band))
+		l := append(labelValues, fmt.Sprintf("%v", chData.AccessPoint), fmt.Sprintf("%v", chChannel), fmt.Sprintf("%v", chData.Band))
 
 		ch <- prometheus.MustNewConstMetric(channelNoiseDesc, prometheus.GaugeValue, chData.NoiseFloor, l...)
 		ch <- prometheus.MustNewConstMetric(channelUtilDesc, prometheus.GaugeValue, chData.ChUtil, l...)
@@ -150,7 +170,7 @@ func (c *wirelessCollector) CollectChannels(client *rpc.Client, ch chan<- promet
 	return radios, nil
 }
 
-func (c *wirelessCollector) CollectRadios(client *rpc.Client, ch chan<- prometheus.Metric, labelValues []string, radios map[string]WirelessRadio) (error) {
+func (c *wirelessCollector) CollectRadios(client *rpc.Client, ch chan<- prometheus.Metric, labelValues []string, radios map[string]WirelessRadio) error {
 	log.Debugf("client: %+v", client)
 	log.Debugf("labelValues: %+v", labelValues)
 	var (
@@ -179,7 +199,7 @@ func (c *wirelessCollector) CollectRadios(client *rpc.Client, ch chan<- promethe
 	}
 	for radioId, radioData := range radios {
 		log.Debugf("radio data: %+v", radioData)
-		l := append(labelValues, fmt.Sprintf("%v", radioData.AccessPoint), fmt.Sprintf("%v",radioId), fmt.Sprintf("%v", radioData.Bssid))
+		l := append(labelValues, fmt.Sprintf("%v", radioData.AccessPoint), fmt.Sprintf("%v", radioId), fmt.Sprintf("%v", radioData.Bssid))
 		log.Debugf("channel labels: %+v", l)
 		//ch <- prometheus.MustNewConstMetric(channelNoiseDesc, prometheus.GaugeValue, chData.NoiseFloor, l...)
 		//ch <- prometheus.MustNewConstMetric(channelUtilDesc, prometheus.GaugeValue, chData.ChUtil, l...)
@@ -195,15 +215,15 @@ func (c *wirelessCollector) Collect(client *rpc.Client, ch chan<- prometheus.Met
 	log.Debugf("client: %+v", client)
 	log.Debugf("labelValues: %+v", labelValues)
 	var err error
-	
-	var aps map[string]WirelessAccessPoint 
+
+	var aps map[string]WirelessAccessPoint
 	aps, err = c.CollectAccessPoints(client, ch, labelValues)
 	if err != nil {
 		log.Debugf("CollectAccessPoints for %s: %s\n", labelValues[0], err.Error())
 	}
 	log.Debugf("aps: %+v", aps)
 
-	var radios map[string]WirelessRadio 
+	var radios map[string]WirelessRadio
 	radios, err = c.CollectChannels(client, ch, labelValues)
 	if err != nil {
 		log.Debugf("CollectChannels for %s: %s\n", labelValues[0], err.Error())
