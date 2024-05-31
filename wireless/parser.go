@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/slashdoom/aruba_exporter/rpc"
@@ -153,4 +154,28 @@ func (c *wirelessCollector) ParseRadios(ostype string, radios map[string]Wireles
 	log.Tracef("output: %s\n", output)
 
 	return make(map[string]WirelessRadio), nil
+}
+
+var (
+	apVLANUsageLineRegex = regexp.MustCompile(`^(\d+)\s+(\d+)$`)
+)
+
+func parseAPVLANUsage(output string) map[int]int {
+	lines := strings.Split(output, "\n")
+	results := make(map[int]int, len(lines))
+	for _, line := range lines {
+		matches := apVLANUsageLineRegex.FindStringSubmatch(line)
+		if len(matches) == 3 {
+			vlan, err := strconv.Atoi(matches[1])
+			if err != nil {
+				continue
+			}
+			clients, err := strconv.Atoi(matches[2])
+			if err != nil {
+				continue
+			}
+			results[vlan] = clients
+		}
+	}
+	return results
 }

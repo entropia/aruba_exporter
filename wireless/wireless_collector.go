@@ -3,6 +3,7 @@ package wireless
 import (
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/slashdoom/aruba_exporter/collector"
 	"github.com/slashdoom/aruba_exporter/rpc"
@@ -14,9 +15,10 @@ import (
 const prefix string = "aruba_wireless_"
 
 var (
-	apUp         *prometheus.Desc
-	apController *prometheus.Desc
-	apClients    *prometheus.Desc
+	apUp               *prometheus.Desc
+	apController       *prometheus.Desc
+	apClients          *prometheus.Desc
+	apConnectedClients *prometheus.Desc
 
 	channelNoiseDesc *prometheus.Desc
 	channelUtilDesc  *prometheus.Desc
@@ -30,6 +32,7 @@ func init() {
 	apUp = prometheus.NewDesc(prefix+"ap_up", "Scrape of AP was successful", l, nil)
 	apController = prometheus.NewDesc(prefix+"ap_controller", "AP is Virtual Controller", l, nil)
 	apClients = prometheus.NewDesc(prefix+"ap_clients", "AP Connected Clients ", l, nil)
+	apConnectedClients = prometheus.NewDesc(prefix+"ap_connected_clients", "Connected Clients per VLAN", []string{"target", "vlan_id"}, nil)
 	l = []string{"target", "ap", "channel", "band"}
 	channelNoiseDesc = prometheus.NewDesc(prefix+"channel_noise", "Channel Noise", l, nil)
 	channelUtilDesc = prometheus.NewDesc(prefix+"channel_utilization", "Channel Utilization", l, nil)
@@ -56,6 +59,7 @@ func (*wirelessCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- apUp
 	ch <- apController
 	ch <- apClients
+	ch <- apConnectedClients
 
 	ch <- channelNoiseDesc
 	ch <- channelUtilDesc
@@ -109,20 +113,23 @@ func (c *wirelessCollector) CollectAccessPoints(client *rpc.Client, ch chan<- pr
 	return aps, nil
 }
 
-func (c *wirelessCollector) CollectVLANUsage(client *rpc.Client, ch chan<- prometheus.Metric) error {
+func (c *wirelessCollector) CollectVLANUsage(client *rpc.Client, ch chan<- prometheus.Metric, labelValues []string) error {
 	out, err := client.RunCommand([]string{"show ap vlan-usage"})
 	if err != nil {
 		return err
 	}
 
 	stats := parseAPVLANUsage(out)
-	log.Debugf("vlan usage: %#v", stats)
+	log.Debugf("vlan clients: %#v", stats)
 	for vlan, clients := range stats {
+		labels := make([]string, 0, len(labelValues)+1)
+		labels = append(labels, labelValues...)
+		labels = append(labels, strconv.Itoa(vlan))
 		ch <- prometheus.MustNewConstMetric(
-			apVLANUsageDesc,
+			apConnectedClients,
 			prometheus.GaugeValue,
 			float64(clients),
-			strconv.Itoa(vlan),
+			labels...,
 		)
 	}
 
@@ -229,6 +236,10 @@ func (c *wirelessCollector) Collect(client *rpc.Client, ch chan<- prometheus.Met
 		log.Debugf("CollectChannels for %s: %s\n", labelValues[0], err.Error())
 	}
 	log.Debugf("radios: %+v", radios)
+
+	if err := c.CollectVLANUsage(client, ch, labelValues); err != nil {
+		log.WithError(err).Error("CollectVLANUsage failed")
+	}
 
 	return nil
 }
